@@ -4,6 +4,7 @@ export interface User {
   name: string;
   email: string;
   points: number;
+  avatar?: string;
 }
 
 export interface Website {

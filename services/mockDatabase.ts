@@ -1,7 +1,6 @@
 
 import { User, Website, Transaction } from '../types';
 
-// Initial Mock Data
 const INITIAL_USERS: User[] = [
   { id: 'u1', name: 'Alex SEO', email: 'alex@example.com', points: 150 },
   { id: 'u2', name: 'Dev Solutions', email: 'dev@example.com', points: 80 },
@@ -20,6 +19,10 @@ class MockDB {
   private transactions: Transaction[] = [];
 
   constructor() {
+    this.load();
+  }
+
+  private load() {
     const saved = localStorage.getItem('linkauthority_db');
     if (saved) {
       const parsed = JSON.parse(saved);
@@ -44,6 +47,22 @@ class MockDB {
   getUsers() { return this.users; }
   getWebsites() { return this.websites; }
   getTransactions() { return this.transactions; }
+
+  findOrCreateUser(name: string, email: string, avatar?: string): User {
+    let user = this.users.find(u => u.email === email);
+    if (!user) {
+      user = {
+        id: `u${Date.now()}`,
+        name,
+        email,
+        points: 100, // New user bonus
+        avatar
+      };
+      this.users.push(user);
+      this.save();
+    }
+    return user;
+  }
 
   updateUserPoints(userId: string, delta: number) {
     const user = this.users.find(u => u.id === userId);
