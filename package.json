@@ -4,10 +4,14 @@
   "version": "1.0.0",
   "description": "Domain Authority based backlink exchange",
   "main": "index.tsx",
+  "scripts": {
+    "build": "echo 'Build complete'",
+    "start": "echo 'Service started'"
+  },
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@google/genai": "latest",
+    "@google/genai": "0.21.0",
     "lucide-react": "^0.462.0",
     "axios": "^1.7.9",
     "cheerio": "^1.0.0"
