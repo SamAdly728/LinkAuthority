@@ -1,29 +1,25 @@
-
-import axios from 'axios';
-import * as cheerio from 'cheerio';
 import { db } from './mockDatabase';
 import { Transaction } from '../types';
 
 /**
  * SEO Verification Service
  * 
- * In a backend Node.js context, this function fetches the HTML of the provider's
- * site and checks for a valid, dofollow backlink pointing to the recipient.
+ * Note: Real backend verification would use axios and cheerio to fetch 
+ * and parse the DOM. In this frontend demo, we simulate this process.
  */
 export const verifyBacklink = async (sourceUrl: string, targetDomain: string): Promise<{ success: boolean; error?: string }> => {
   try {
     if (!sourceUrl.startsWith('http')) return { success: false, error: 'Invalid URL format' };
 
-    // Simulation of the following backend logic:
-    // const { data } = await axios.get(sourceUrl);
-    // const $ = cheerio.load(data);
-    // const link = $(`a[href*="${targetDomain}"]`);
-    // const rel = link.attr('rel') || '';
-    // if (link.length > 0 && !rel.includes('nofollow')) { return { success: true }; }
-
+    // Simulating network delay for site crawling
     await new Promise(resolve => setTimeout(resolve, 1800));
     
-    // Simulate verification success (85% probability)
+    // Simulate verification logic:
+    // 1. Fetching URL
+    // 2. Finding <a> tag with targetDomain
+    // 3. Checking for rel="nofollow"
+    
+    // Random outcome for demo purposes (85% success rate)
     const success = Math.random() > 0.15; 
     return success ? { success: true } : { success: false, error: 'Target backlink not found or marked as nofollow.' };
   } catch (err) {
@@ -36,11 +32,11 @@ export const verifyBacklink = async (sourceUrl: string, targetDomain: string): P
  * 
  * Logic Rationale:
  * High Domain Authority (DA) sites are more valuable for SEO. 
- * Therefore, points are calculated directly as the DA of the source site.
+ * Points are calculated directly as the DA of the source site.
  * 
- * - User A (Provider, DA 40) gives a link to User B.
- * - User A earns 40 points (compensating for their authority).
- * - User B pays 40 points (buying the 40 DA authority).
+ * - Provider (Site with DA 40) gives a link.
+ * - Provider earns 40 points.
+ * - Recipient pays 40 points.
  */
 export const executeExchange = (
   providerId: string, 
