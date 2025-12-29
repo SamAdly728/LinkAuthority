@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   name: string;
@@ -18,19 +17,18 @@ export interface Website {
 
 export interface Transaction {
   id: string;
-  sourceWebsiteId: string; // Where the link is placed
-  targetWebsiteId: string; // The link itself
-  recipientUserId: string; // Who gets the link
-  providerUserId: string;  // Who provides the link
-  sourceUrl: string;       // Exact URL where link lives
+  sourceWebsiteId: string; 
+  targetWebsiteId: string; 
+  recipientUserId: string; 
+  providerUserId: string;  
+  sourceUrl: string;       
   pointsTransferred: number;
   status: 'pending' | 'verified' | 'failed';
   timestamp: Date;
 }
 
 export interface SEOAnalysis {
-  domain: string;
-  suggestedDA: number;
+  da: number;
   niche: string;
-  qualityScore: number;
+  summary: string;
 }

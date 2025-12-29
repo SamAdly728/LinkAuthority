@@ -1,245 +1,166 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Globe, 
   LayoutDashboard, 
-  ArrowUpRight, 
+  PlusCircle, 
+  Zap, 
+  History, 
+  TrendingUp, 
   ShieldCheck, 
-  PlusCircle,
-  History,
-  TrendingUp,
-  ExternalLink,
-  Loader2,
-  CheckCircle2,
-  XCircle,
+  ArrowUpRight, 
+  Loader2, 
+  CheckCircle2, 
   AlertCircle,
+  ExternalLink,
   LogOut,
-  Zap,
-  Lock,
   Search,
-  User as UserIcon
+  ChevronRight,
+  Database
 } from 'lucide-react';
-import { db } from './services/mockDatabase';
-import { User, Website, Transaction } from './types';
-import { analyzeWebsiteForDA } from './services/geminiService';
-import { verifyBacklink, executeExchange } from './services/verificationService';
-
-const StatCard = ({ title, value, icon: Icon, color }: any) => (
-  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-    <div className={`p-3 rounded-xl ${color}`}>
-      <Icon size={24} className="text-white" />
-    </div>
-    <div>
-      <p className="text-slate-500 text-sm font-medium">{title}</p>
-      <h3 className="text-2xl font-bold text-slate-800">{value}</h3>
-    </div>
-  </div>
-);
+import { db } from './services/mockDatabase.ts';
+import { User, Website, Transaction } from './types.ts';
+import { analyzeDomain } from './services/geminiService.ts';
+import { verifyBacklink, executeExchange } from './services/verificationService.ts';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'dashboard' | 'add-site' | 'history'>('marketplace');
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'dashboard' | 'history' | 'add'>('marketplace');
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('linkauthority_auth');
-    if (saved) return JSON.parse(saved);
-    return null;
+    const saved = localStorage.getItem('la_auth');
+    return saved ? JSON.parse(saved) : null;
   });
   
   const [websites, setWebsites] = useState<Website[]>(db.getWebsites());
   const [transactions, setTransactions] = useState<Transaction[]>(db.getTransactions());
-  const [isLoading, setIsLoading] = useState(false);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
-  const handleLoginSuccess = (response: any) => {
-    try {
-      const base64Url = response.credential.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join(''));
+  // Auto-hide toast
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
 
-      const googleUser = JSON.parse(jsonPayload);
-      const user = db.findOrCreateUser(googleUser.name, googleUser.email, googleUser.picture);
-      
-      setCurrentUser(user);
-      localStorage.setItem('linkauthority_auth', JSON.stringify(user));
-      setNotification({ type: 'success', message: `Welcome back, ${user.name}!` });
-    } catch (e) {
-      setNotification({ type: 'error', message: 'Failed to process Google login.' });
+  // UI Refresher
+  const refresh = () => {
+    setWebsites(db.getWebsites());
+    setTransactions(db.getTransactions());
+    if (currentUser) {
+      const freshUser = db.getUsers().find(u => u.id === currentUser.id);
+      if (freshUser) setCurrentUser({ ...freshUser });
     }
   };
 
   const handleDemoLogin = () => {
-    const demoUser = db.findOrCreateUser('Demo Master', 'demo@linkauthority.io', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix');
+    const demoUser = db.findOrCreateUser('SEO Master', 'demo@linkauthority.io', 'https://api.dicebear.com/7.x/avataaars/svg?seed=SEO');
     setCurrentUser(demoUser);
-    localStorage.setItem('linkauthority_auth', JSON.stringify(demoUser));
-    setNotification({ type: 'success', message: 'Logged in as Demo User with 100 bonus points!' });
+    localStorage.setItem('la_auth', JSON.stringify(demoUser));
+    setToast({ type: 'success', msg: 'Welcome to the Authority Economy!' });
   };
 
-  const logout = () => {
-    localStorage.removeItem('linkauthority_auth');
-    setCurrentUser(null);
-    window.location.reload(); 
-  };
-
-  useEffect(() => {
-    if (!currentUser) {
-      /* global google */
-      // @ts-ignore
-      if (typeof google !== 'undefined') {
-        try {
-          // @ts-ignore
-          google.accounts.id.initialize({
-            client_id: "241819621736-n1i653vpkd2cbm953k7b8q02gh5a3vc6.apps.googleusercontent.com", 
-            callback: handleLoginSuccess,
-            auto_select: false,
-            use_fedcm_for_prompt: false 
-          });
-
-          // @ts-ignore
-          google.accounts.id.renderButton(
-            googleBtnRef.current,
-            { theme: "outline", size: "large", width: "100%", text: "signin_with" }
-          );
-        } catch (err) {
-          console.warn("Google Auth initialization skipped or failed.");
-        }
-      }
-    }
-  }, [currentUser]);
-
-  const refreshData = () => {
-    setWebsites(db.getWebsites());
-    setTransactions(db.getTransactions());
-    if (currentUser) {
-      const refreshedUser = db.getUsers().find(u => u.id === currentUser.id);
-      if (refreshedUser) setCurrentUser({ ...refreshedUser });
-    }
-  };
-
-  const handleAddWebsite = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddSite = async (e: React.FormEvent<HTMLFormElement>) => {
     if (!currentUser) return;
     e.preventDefault();
-    setIsLoading(true);
+    setLoading(true);
     const formData = new FormData(e.currentTarget);
     const domain = formData.get('domain') as string;
-    const desc = formData.get('description') as string;
 
-    const analysis = await analyzeWebsiteForDA(domain);
+    const analysis = await analyzeDomain(domain);
     
     const newSite: Website = {
       id: `w${Date.now()}`,
       ownerId: currentUser.id,
       domain,
       domainAuthority: analysis.da,
-      description: desc || analysis.summary,
-      category: analysis.niche
+      category: analysis.niche,
+      description: analysis.summary
     };
 
     db.addWebsite(newSite);
-    refreshData();
-    setIsLoading(false);
+    refresh();
+    setLoading(false);
     setActiveTab('dashboard');
-    setNotification({ type: 'success', message: `Site added with DA ${analysis.da}!` });
+    setToast({ type: 'success', msg: `Site registered with DA ${analysis.da}` });
   };
 
-  const handleVerifyExchange = async (sourceWebsite: Website, targetWebsite: Website) => {
+  const handleExchange = async (recipientSite: Website) => {
     if (!currentUser) return;
-    setIsLoading(true);
-    const simulatedSourceUrl = `https://${sourceWebsite.domain}/seo-guest-feature`;
-    const result = await verifyBacklink(simulatedSourceUrl, targetWebsite.domain);
+    const providerSites = websites.filter(w => w.ownerId === currentUser.id);
+    
+    if (providerSites.length === 0) {
+      setToast({ type: 'error', msg: 'Register a site first to provide links!' });
+      return;
+    }
+
+    setLoading(true);
+    const sourceSite = providerSites[0]; // For demo, use their first site
+    const sourceUrl = `https://${sourceSite.domain}/verified-outreach`;
+    
+    const result = await verifyBacklink(sourceUrl, recipientSite.domain);
     
     if (result.success) {
       const tx: Transaction = {
         id: `tx${Date.now()}`,
-        sourceWebsiteId: sourceWebsite.id,
-        targetWebsiteId: targetWebsite.id,
-        recipientUserId: targetWebsite.ownerId,
-        providerUserId: sourceWebsite.ownerId,
-        sourceUrl: simulatedSourceUrl,
-        pointsTransferred: sourceWebsite.domainAuthority,
+        sourceWebsiteId: sourceSite.id,
+        targetWebsiteId: recipientSite.id,
+        recipientUserId: recipientSite.ownerId,
+        providerUserId: currentUser.id,
+        sourceUrl,
+        pointsTransferred: sourceSite.domainAuthority,
         status: 'pending',
         timestamp: new Date()
       };
 
-      executeExchange(sourceWebsite.ownerId, targetWebsite.ownerId, sourceWebsite.domainAuthority, tx);
-      setNotification({ type: 'success', message: `Link Verified! You earned ${sourceWebsite.domainAuthority} points.` });
+      executeExchange(currentUser.id, recipientSite.ownerId, sourceSite.domainAuthority, tx);
+      setToast({ type: 'success', msg: `Link verified! Earned ${sourceSite.domainAuthority} points.` });
     } else {
-      setNotification({ type: 'error', message: result.error || 'Verification failed.' });
+      setToast({ type: 'error', msg: result.error || 'Verification failed.' });
     }
-
-    refreshData();
-    setIsLoading(false);
+    
+    refresh();
+    setLoading(false);
   };
-
-  useEffect(() => {
-    if (notification) {
-      const timer = setTimeout(() => setNotification(null), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [notification]);
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600"></div>
-        <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <div className="space-y-8">
+      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950 text-white overflow-hidden relative">
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,#1e1b4b,transparent)] opacity-40"></div>
+        <div className="max-w-5xl w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center z-10">
+          <div className="space-y-10">
             <div className="flex items-center gap-3">
-              <div className="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-200">
-                <TrendingUp className="text-white" size={32} />
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <TrendingUp className="text-white" size={28} />
               </div>
-              <span className="text-3xl font-black text-slate-900 tracking-tight">LinkAuthority</span>
+              <span className="text-3xl font-black tracking-tight">LinkAuthority</span>
             </div>
-            <div className="space-y-4">
-              <h1 className="text-5xl font-black text-slate-900 leading-[1.1]">
-                Master the <span className="text-indigo-600">Authority</span> Economy.
-              </h1>
-              <p className="text-lg text-slate-600 leading-relaxed">
-                The world's first domain authority-based backlink exchange. Verified, transparent, and built for modern SEOs.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-2 text-slate-600 font-medium text-sm">
-                <ShieldCheck className="text-indigo-600" size={18} /> Verified Links
+            <h1 className="text-6xl font-black leading-tight">
+              Trade <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400">Authority</span>,<br /> Not Just Links.
+            </h1>
+            <p className="text-slate-400 text-lg max-w-md">
+              The first backlink exchange where Domain Authority translates directly into trading power. Verified dofollow links for serious SEOs.
+            </p>
+            <div className="flex gap-8">
+              <div className="flex items-center gap-2 text-sm text-slate-300">
+                <ShieldCheck className="text-indigo-400" /> AI Verified
               </div>
-              <div className="flex items-center gap-2 text-slate-600 font-medium text-sm">
-                <Zap className="text-indigo-600" size={18} /> One Tap Auth
-              </div>
-              <div className="flex items-center gap-2 text-slate-600 font-medium text-sm">
-                <Search className="text-indigo-600" size={18} /> AI Analysis
-              </div>
-              <div className="flex items-center gap-2 text-slate-600 font-medium text-sm">
-                <ArrowUpRight className="text-indigo-600" size={18} /> High DA Reach
+              <div className="flex items-center gap-2 text-sm text-slate-300">
+                <Zap className="text-indigo-400" /> Real-time DA
               </div>
             </div>
           </div>
-
-          <div className="bg-white p-10 rounded-[32px] shadow-2xl border border-slate-100 flex flex-col items-center text-center space-y-6 relative">
-            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 mb-2">
-              <Lock size={32} />
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-slate-900">Sign in to Trade</h2>
-              <p className="text-slate-500 text-sm">Join the network of authority builders</p>
-            </div>
-            
-            <div className="w-full space-y-4">
-              <div ref={googleBtnRef} className="w-full min-h-[40px] flex justify-center"></div>
-              <div className="relative flex py-2 items-center">
-                  <div className="flex-grow border-t border-slate-100"></div>
-                  <span className="flex-shrink mx-4 text-slate-400 text-[10px] font-bold uppercase tracking-widest">or</span>
-                  <div className="flex-grow border-t border-slate-100"></div>
-              </div>
-              <button 
-                onClick={handleDemoLogin}
-                className="w-full py-3.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2 shadow-sm"
-              >
-                <UserIcon size={18} className="text-indigo-600" />
-                Sign in as Demo User
-              </button>
-            </div>
+          <div className="bg-slate-900/50 border border-slate-800 p-12 rounded-[40px] backdrop-blur-xl text-center space-y-8">
+            <h2 className="text-2xl font-bold">Start Building Power</h2>
+            <button 
+              onClick={handleDemoLogin}
+              className="w-full py-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 transition-all font-black text-xl flex items-center justify-center gap-3 group"
+            >
+              Sign In to Marketplace
+              <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+            </button>
+            <div className="text-slate-500 text-sm">Join 2,400+ high-authority publishers</div>
           </div>
         </div>
       </div>
@@ -247,222 +168,296 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
-      <nav className="w-full md:w-64 bg-white border-r border-slate-200 p-6 flex flex-col gap-8 sticky top-0 h-screen">
-        <div className="flex items-center gap-2 px-2">
-          <div className="bg-indigo-600 p-2 rounded-lg">
-            <TrendingUp className="text-white" size={24} />
-          </div>
-          <span className="text-xl font-bold text-slate-900 tracking-tight">LinkAuthority</span>
+    <div className="min-h-screen flex flex-col lg:flex-row bg-[#fcfdff]">
+      {/* Sidebar */}
+      <nav className="w-full lg:w-72 bg-[#0c1024] p-8 flex flex-col gap-10 text-white shrink-0 sticky top-0 h-screen">
+        <div className="flex items-center gap-3">
+          <TrendingUp className="text-indigo-400" size={28} />
+          <span className="text-2xl font-black tracking-tight">LinkAuthority</span>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 flex-1">
           <button 
             onClick={() => setActiveTab('marketplace')}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'marketplace' ? 'bg-indigo-50 text-indigo-600 font-semibold shadow-sm border border-indigo-100' : 'text-slate-500 hover:bg-slate-50'}`}
+            className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all ${activeTab === 'marketplace' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/20' : 'text-slate-400 hover:bg-white/5'}`}
           >
             <Globe size={20} /> Marketplace
           </button>
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-indigo-50 text-indigo-600 font-semibold shadow-sm border border-indigo-100' : 'text-slate-500 hover:bg-slate-50'}`}
+            className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/20' : 'text-slate-400 hover:bg-white/5'}`}
           >
-            <LayoutDashboard size={20} /> My Sites
+            <LayoutDashboard size={20} /> My Portfolio
           </button>
           <button 
             onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'history' ? 'bg-indigo-50 text-indigo-600 font-semibold shadow-sm border border-indigo-100' : 'text-slate-500 hover:bg-slate-50'}`}
+            className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/20' : 'text-slate-400 hover:bg-white/5'}`}
           >
             <History size={20} /> Activity
           </button>
           <button 
-            onClick={() => setActiveTab('add-site')}
-            className="mt-4 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200"
+            onClick={() => setActiveTab('add')}
+            className="mt-4 flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-dashed border-slate-700 text-slate-400 hover:border-indigo-400 hover:text-indigo-400 transition-all font-bold"
           >
-            <PlusCircle size={20} /> Register Site
+            <PlusCircle size={20} /> Register Website
           </button>
         </div>
 
-        <div className="mt-auto">
-          <div className="p-4 bg-slate-900 rounded-2xl text-white mb-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-slate-400 text-xs uppercase tracking-wider">Trading Power</span>
-              <Zap size={16} className="text-amber-400 fill-amber-400" />
+        <div className="space-y-6">
+          <div className="p-6 bg-white/5 rounded-[24px] border border-white/10 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-125 transition-transform">
+              <Zap size={60} className="text-amber-400" />
             </div>
-            <div className="text-2xl font-bold">{currentUser.points} pts</div>
+            <p className="text-slate-500 text-xs font-black uppercase tracking-widest mb-1">Trading Power</p>
+            <p className="text-3xl font-black">{currentUser.points} <span className="text-sm font-medium text-slate-500">pts</span></p>
           </div>
-          <div className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200">
-            {currentUser.avatar ? (
-              <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-lg shadow-sm" />
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
-                {currentUser.name.charAt(0)}
-              </div>
-            )}
-            <div className="flex-1 overflow-hidden">
-              <div className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</div>
-              <div className="text-[10px] text-slate-500 truncate">{currentUser.email}</div>
+          
+          <div className="flex items-center gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer">
+            <img src={currentUser.avatar} className="w-10 h-10 rounded-xl" alt="profile" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold truncate">{currentUser.name}</p>
+              <p className="text-[10px] text-slate-500 uppercase font-black">Pro Publisher</p>
             </div>
-            <button onClick={logout} className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors rounded-md">
-              <LogOut size={16} />
-            </button>
+            <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="p-2 text-slate-500 hover:text-white"><LogOut size={18} /></button>
           </div>
         </div>
       </nav>
 
-      <main className="flex-1 p-6 md:p-10 overflow-y-auto max-w-7xl mx-auto w-full">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+      {/* Content Area */}
+      <main className="flex-1 p-6 lg:p-12 overflow-y-auto">
+        <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-12 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">
+            <h2 className="text-4xl font-black tracking-tight text-slate-900">
               {activeTab === 'marketplace' && 'Link Marketplace'}
-              {activeTab === 'dashboard' && 'Publisher Dashboard'}
-              {activeTab === 'add-site' && 'Add Website'}
-              {activeTab === 'history' && 'Transaction History'}
-            </h1>
+              {activeTab === 'dashboard' && 'Publisher Portfolio'}
+              {activeTab === 'history' && 'Activity Ledger'}
+              {activeTab === 'add' && 'Site Registration'}
+            </h2>
+            <p className="text-slate-500 mt-1 font-medium italic">
+              {activeTab === 'marketplace' && 'Authority score determines link value.'}
+              {activeTab === 'dashboard' && 'Manage your high-DA assets.'}
+            </p>
           </div>
+          
+          {activeTab === 'marketplace' && (
+            <div className="flex items-center gap-2 bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
+              <Search className="text-slate-400" size={18} />
+              <input type="text" placeholder="Search by niche..." className="bg-transparent outline-none text-sm font-medium w-48" />
+            </div>
+          )}
         </header>
 
-        {notification && (
-          <div className={`fixed bottom-6 right-6 z-50 p-4 rounded-xl shadow-2xl flex items-center gap-3 transition-all animate-in slide-in-from-right-4 ${notification.type === 'success' ? 'bg-white text-emerald-800 border-l-4 border-emerald-500' : 'bg-white text-rose-800 border-l-4 border-rose-500'}`}>
-            {notification.type === 'success' ? <CheckCircle2 className="text-emerald-500" size={20} /> : <XCircle className="text-rose-500" size={20} />}
-            <span className="font-semibold">{notification.message}</span>
+        {toast && (
+          <div className={`fixed top-8 right-8 z-[100] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-l-4 border-emerald-500' : 'bg-rose-50 text-rose-800 border-l-4 border-rose-500'}`}>
+            {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+            <span className="font-bold">{toast.msg}</span>
           </div>
         )}
 
-        <div className="space-y-8">
-          {activeTab === 'marketplace' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {websites.filter(w => w.ownerId !== currentUser.id).map(site => (
-                <div key={site.id} className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all group">
-                  <div className="bg-slate-900 p-6 text-white relative">
-                    <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
-                      <Globe size={80} />
-                    </div>
-                    <div className="relative">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">{site.category}</span>
-                      <h3 className="text-xl font-bold truncate mt-1">{site.domain}</h3>
-                    </div>
+        {activeTab === 'marketplace' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+            {websites
+              .filter(w => w.ownerId !== currentUser.id)
+              // Only show sites if owner has > 0 points
+              .filter(w => {
+                const owner = db.getUsers().find(u => u.id === w.ownerId);
+                return (owner?.points || 0) > 0;
+              })
+              .map(site => (
+              <div key={site.id} className="bg-white rounded-[32px] border border-slate-100 p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group">
+                <div className="flex justify-between items-start mb-8">
+                  <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-indigo-600 transition-colors">
+                    <Globe size={32} />
                   </div>
-                  <div className="p-6">
-                    <div className="flex justify-between items-center mb-6">
-                      <div className="space-y-1">
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Domain Authority</div>
-                        <div className="text-2xl font-black text-slate-900">{site.domainAuthority} <span className="text-sm font-medium text-slate-400">DA</span></div>
-                      </div>
-                      <div className="w-12 h-12 rounded-full border-4 border-slate-50 flex items-center justify-center relative overflow-hidden">
-                        <div className="absolute inset-0 bg-indigo-600 opacity-20" style={{ height: `${site.domainAuthority}%`, top: 'auto' }}></div>
-                        <Zap size={18} className="text-indigo-600 z-10" />
-                      </div>
+                  <div className="text-right">
+                    <div className="da-badge text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20">
+                      DA {site.domainAuthority}
                     </div>
-                    <p className="text-slate-600 text-sm mb-6 line-clamp-2 min-h-[40px] italic">"{site.description}"</p>
-                    <button 
-                      onClick={() => {
-                        const userSites = websites.filter(w => w.ownerId === currentUser.id);
-                        if (userSites.length === 0) {
-                          setNotification({ type: 'error', message: 'Add a site to start trading!' });
-                          return;
-                        }
-                        handleVerifyExchange(userSites[0], site);
-                      }}
-                      disabled={isLoading}
-                      className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {isLoading ? <Loader2 className="animate-spin" size={18} /> : 'Request Backlink'}
-                    </button>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-2 tracking-tighter">SEO Authority</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'dashboard' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard title="Total Sites" value={websites.filter(w => w.ownerId === currentUser.id).length} icon={Globe} color="bg-indigo-600" />
-                <StatCard title="Earned Points" value={currentUser.points} icon={Zap} color="bg-amber-500" />
-                <StatCard title="Verified Exchanges" value={transactions.filter(t => t.providerUserId === currentUser.id || t.recipientUserId === currentUser.id).length} icon={ShieldCheck} color="bg-emerald-500" />
-              </div>
-              <div className="bg-white rounded-[24px] shadow-sm border border-slate-100 overflow-hidden">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                  <h3 className="text-lg font-bold text-slate-900">Your Portfolio</h3>
-                  <button onClick={() => setActiveTab('add-site')} className="text-indigo-600 font-bold text-sm hover:underline">Add New +</button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-wider">
-                      <tr>
-                        <th className="px-6 py-4">Domain</th>
-                        <th className="px-6 py-4">DA Score</th>
-                        <th className="px-6 py-4">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {websites.filter(w => w.ownerId === currentUser.id).map(site => (
-                        <tr key={site.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4 font-bold text-slate-900">{site.domain}</td>
-                          <td className="px-6 py-4 font-black text-indigo-600">{site.domainAuthority}</td>
-                          <td className="px-6 py-4">
-                            <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase">Active</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'add-site' && (
-            <div className="max-w-xl mx-auto">
-              <div className="bg-white p-10 rounded-[40px] shadow-2xl border border-slate-100">
-                <form onSubmit={handleAddWebsite} className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-black uppercase text-slate-400">Domain Root</label>
-                    <input name="domain" required placeholder="example.com" className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-600 focus:outline-none" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-black uppercase text-slate-400">Description</label>
-                    <textarea name="description" rows={3} placeholder="Site summary..." className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-600 focus:outline-none" />
-                  </div>
-                  <button type="submit" disabled={isLoading} className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-indigo-700 disabled:opacity-50">
-                    {isLoading ? <Loader2 className="animate-spin" /> : 'Analyze & Add Site'}
+                
+                <h3 className="text-xl font-bold text-slate-900 mb-2 truncate">{site.domain}</h3>
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-4 block">{site.category}</span>
+                <p className="text-slate-500 text-sm leading-relaxed mb-8 line-clamp-3">"{site.description}"</p>
+                
+                <div className="pt-6 border-t border-slate-50">
+                  <button 
+                    onClick={() => handleExchange(site)}
+                    disabled={loading}
+                    className="w-full py-4 rounded-2xl bg-slate-900 text-white font-black hover:bg-indigo-600 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
+                  >
+                    {loading ? <Loader2 className="animate-spin" size={20} /> : (
+                      <>
+                        Request Backlink
+                        <ArrowUpRight className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" size={18} />
+                      </>
+                    )}
                   </button>
-                </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'dashboard' && (
+          <div className="space-y-12">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex items-center gap-6">
+                <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600"><Globe size={32} /></div>
+                <div>
+                  <p className="text-slate-500 text-xs font-black uppercase tracking-wider">Active Domains</p>
+                  <p className="text-3xl font-black">{websites.filter(w => w.ownerId === currentUser.id).length}</p>
+                </div>
+              </div>
+              <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex items-center gap-6">
+                <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600"><Zap size={32} /></div>
+                <div>
+                  <p className="text-slate-500 text-xs font-black uppercase tracking-wider">Trading Power</p>
+                  <p className="text-3xl font-black">{currentUser.points}</p>
+                </div>
+              </div>
+              <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex items-center gap-6">
+                <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600"><ShieldCheck size={32} /></div>
+                <div>
+                  <p className="text-slate-500 text-xs font-black uppercase tracking-wider">Verified Links</p>
+                  <p className="text-3xl font-black">{transactions.length}</p>
+                </div>
               </div>
             </div>
-          )}
 
-          {activeTab === 'history' && (
-            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-               <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase">
-                      <tr>
-                        <th className="px-6 py-4">Timestamp</th>
-                        <th className="px-6 py-4">Details</th>
-                        <th className="px-6 py-4">Impact</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {transactions.filter(tx => tx.providerUserId === currentUser.id || tx.recipientUserId === currentUser.id).map(tx => {
-                        const isProvider = tx.providerUserId === currentUser.id;
-                        return (
-                          <tr key={tx.id}>
-                            <td className="px-6 py-4 text-xs">{new Date(tx.timestamp).toLocaleString()}</td>
-                            <td className="px-6 py-4 font-bold">{isProvider ? 'Provided Link' : 'Received Link'}</td>
-                            <td className="px-6 py-4 font-black flex items-center gap-1">
-                               {isProvider ? '+' : '-'}{tx.pointsTransferred} <Zap size={12} className="text-amber-500" />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-               </div>
+            <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr>
+                    <th className="px-8 py-6 text-xs font-black uppercase text-slate-400">Website Asset</th>
+                    <th className="px-8 py-6 text-xs font-black uppercase text-slate-400">DA Score</th>
+                    <th className="px-8 py-6 text-xs font-black uppercase text-slate-400">Category</th>
+                    <th className="px-8 py-6 text-xs font-black uppercase text-slate-400 text-right">Visibility</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {websites.filter(w => w.ownerId === currentUser.id).map(site => (
+                    <tr key={site.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-8 py-6 font-bold text-slate-900">{site.domain}</td>
+                      <td className="px-8 py-6">
+                        <span className="px-3 py-1 rounded-lg bg-indigo-50 text-indigo-600 font-black text-sm">DA {site.domainAuthority}</span>
+                      </td>
+                      <td className="px-8 py-6 text-slate-500 font-medium">{site.category}</td>
+                      <td className="px-8 py-6 text-right">
+                        {currentUser.points > 0 ? (
+                          <span className="inline-flex items-center gap-1.5 text-emerald-600 text-xs font-black uppercase"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Active</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-rose-500 text-xs font-black uppercase"><AlertCircle size={14} /> Low Balance Hidden</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {websites.filter(w => w.ownerId === currentUser.id).length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-8 py-20 text-center text-slate-400 italic">No websites registered yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {activeTab === 'add' && (
+          <div className="max-w-2xl mx-auto py-12">
+            <div className="bg-white p-12 rounded-[48px] shadow-2xl border border-slate-100 relative">
+              <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-24 h-24 bg-indigo-600 rounded-[32px] flex items-center justify-center text-white shadow-2xl shadow-indigo-500/40 animate-float">
+                <Database size={40} />
+              </div>
+              <div className="text-center mb-10 mt-6">
+                <h3 className="text-3xl font-black text-slate-900">Register New Asset</h3>
+                <p className="text-slate-500 font-medium">Our AI will analyze your domain authority.</p>
+              </div>
+              <form onSubmit={handleAddSite} className="space-y-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Root Domain</label>
+                  <div className="relative">
+                    <Globe className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                    <input 
+                      name="domain" 
+                      required 
+                      placeholder="e.g. techblog.com" 
+                      className="w-full bg-slate-50 border-2 border-slate-100 px-16 py-5 rounded-2xl outline-none focus:border-indigo-600 transition-all font-bold text-slate-900" 
+                    />
+                  </div>
+                </div>
+                <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+                  <div className="flex gap-4 items-start">
+                    <Zap className="text-indigo-600 shrink-0" size={24} />
+                    <p className="text-xs text-indigo-900 leading-relaxed font-medium">
+                      By registering, your site will be scanned for Domain Authority. High DA sites (50+) earn significantly more points per verified link provided.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="w-full py-6 rounded-2xl bg-indigo-600 text-white font-black text-xl hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50 flex items-center justify-center gap-3"
+                >
+                  {loading ? <Loader2 className="animate-spin" /> : 'Run AI SEO Analysis'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 border-b border-slate-100 font-black uppercase text-slate-400 text-[10px] tracking-widest">
+                <tr>
+                  <th className="px-8 py-6">Timestamp</th>
+                  <th className="px-8 py-6">Operation</th>
+                  <th className="px-8 py-6">Host / Target</th>
+                  <th className="px-8 py-6 text-right">Points Impact</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {transactions.map(tx => {
+                  const isProvider = tx.providerUserId === currentUser.id;
+                  const hostSite = websites.find(w => w.id === tx.sourceWebsiteId);
+                  const targetSite = websites.find(w => w.id === tx.targetWebsiteId);
+                  
+                  return (
+                    <tr key={tx.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-8 py-6 text-slate-400 font-medium">
+                        {new Date(tx.timestamp).toLocaleDateString()}
+                      </td>
+                      <td className="px-8 py-6">
+                        <span className={`inline-flex items-center gap-1.5 font-bold ${isProvider ? 'text-indigo-600' : 'text-slate-900'}`}>
+                          {isProvider ? 'Provided Link' : 'Received Link'}
+                        </span>
+                      </td>
+                      <td className="px-8 py-6">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold">{hostSite?.domain}</span>
+                          <ChevronRight size={14} className="text-slate-300" />
+                          <span className="font-medium text-slate-500">{targetSite?.domain}</span>
+                        </div>
+                      </td>
+                      <td className="px-8 py-6 text-right font-black text-lg">
+                        <span className={isProvider ? 'text-emerald-500' : 'text-rose-500'}>
+                          {isProvider ? '+' : '-'}{tx.pointsTransferred}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {transactions.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-8 py-20 text-center text-slate-400 italic">No transactions recorded yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </main>
     </div>
   );

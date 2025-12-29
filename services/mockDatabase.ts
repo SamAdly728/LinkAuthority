@@ -1,16 +1,15 @@
-
-import { User, Website, Transaction } from '../types';
+import { User, Website, Transaction } from '../types.ts';
 
 const INITIAL_USERS: User[] = [
-  { id: 'u1', name: 'Alex SEO', email: 'alex@example.com', points: 150 },
-  { id: 'u2', name: 'Dev Solutions', email: 'dev@example.com', points: 80 },
-  { id: 'u3', name: 'Marketing Pro', email: 'pro@example.com', points: 12 },
+  { id: 'u1', name: 'SEO Ninja', email: 'ninja@links.io', points: 150 },
+  { id: 'u2', name: 'Startup Growth', email: 'growth@startup.co', points: 45 },
+  { id: 'u3', name: 'Tech Blog Pro', email: 'pro@tech.net', points: 0 }, // Hidden by default (<1 pt)
 ];
 
 const INITIAL_WEBSITES: Website[] = [
-  { id: 'w1', ownerId: 'u1', domain: 'techcrunch.com', domainAuthority: 92, description: 'Tech News and Analysis', category: 'Technology' },
-  { id: 'w2', ownerId: 'u2', domain: 'mydevblog.io', domainAuthority: 35, description: 'Personal coding tutorials', category: 'Education' },
-  { id: 'w3', ownerId: 'u3', domain: 'healthyliving.net', domainAuthority: 25, description: 'Lifestyle and nutrition tips', category: 'Health' },
+  { id: 'w1', ownerId: 'u1', domain: 'forbes.com', domainAuthority: 95, description: 'Global business and finance news.', category: 'Business' },
+  { id: 'w2', ownerId: 'u2', domain: 'indiehackers.com', domainAuthority: 72, description: 'Community of profitable side projects.', category: 'Tech' },
+  { id: 'w3', ownerId: 'u3', domain: 'my-tiny-blog.me', domainAuthority: 12, description: 'Personal coding journey.', category: 'Education' },
 ];
 
 class MockDB {
@@ -23,7 +22,7 @@ class MockDB {
   }
 
   private load() {
-    const saved = localStorage.getItem('linkauthority_db');
+    const saved = localStorage.getItem('linkauthority_v2');
     if (saved) {
       const parsed = JSON.parse(saved);
       this.users = parsed.users;
@@ -37,7 +36,7 @@ class MockDB {
   }
 
   private save() {
-    localStorage.setItem('linkauthority_db', JSON.stringify({
+    localStorage.setItem('linkauthority_v2', JSON.stringify({
       users: this.users,
       websites: this.websites,
       transactions: this.transactions
@@ -51,13 +50,7 @@ class MockDB {
   findOrCreateUser(name: string, email: string, avatar?: string): User {
     let user = this.users.find(u => u.email === email);
     if (!user) {
-      user = {
-        id: `u${Date.now()}`,
-        name,
-        email,
-        points: 100, // New user bonus
-        avatar
-      };
+      user = { id: `u${Date.now()}`, name, email, points: 50, avatar };
       this.users.push(user);
       this.save();
     }
@@ -72,13 +65,13 @@ class MockDB {
     }
   }
 
-  addTransaction(tx: Transaction) {
-    this.transactions.unshift(tx);
+  addWebsite(web: Website) {
+    this.websites.push(web);
     this.save();
   }
 
-  addWebsite(web: Website) {
-    this.websites.push(web);
+  addTransaction(tx: Transaction) {
+    this.transactions.unshift(tx);
     this.save();
   }
 }

@@ -1,59 +1,51 @@
-import { db } from './mockDatabase';
-import { Transaction } from '../types';
+import { db } from './mockDatabase.ts';
+import { Transaction } from '../types.ts';
 
 /**
- * SEO Verification Service
- * 
- * Note: Real backend verification would use axios and cheerio to fetch 
- * and parse the DOM. In this frontend demo, we simulate this process.
+ * Verification Logic (The "Backend" Simulation)
+ * In a real Node environment, this uses axios and cheerio.
  */
 export const verifyBacklink = async (sourceUrl: string, targetDomain: string): Promise<{ success: boolean; error?: string }> => {
   try {
-    if (!sourceUrl.startsWith('http')) return { success: false, error: 'Invalid URL format' };
-
-    // Simulating network delay for site crawling
-    await new Promise(resolve => setTimeout(resolve, 1800));
+    // 1. Visit Source URL (Simulated)
+    // const { data } = await axios.get(sourceUrl);
+    // const $ = cheerio.load(data);
     
-    // Simulate verification logic:
-    // 1. Fetching URL
-    // 2. Finding <a> tag with targetDomain
-    // 3. Checking for rel="nofollow"
+    // 2. Search for Target Domain
+    // const link = $('a').filter((i, el) => $(el).attr('href').includes(targetDomain));
     
-    // Random outcome for demo purposes (85% success rate)
-    const success = Math.random() > 0.15; 
-    return success ? { success: true } : { success: false, error: 'Target backlink not found or marked as nofollow.' };
+    // 3. Validate rel="nofollow"
+    // if (link.attr('rel')?.includes('nofollow')) return { success: false, error: 'Link is nofollow' };
+    
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    const success = Math.random() > 0.1; // 90% success for demo
+    
+    return success ? { success: true } : { success: false, error: 'No dofollow link found on host page.' };
   } catch (err) {
-    return { success: false, error: 'Host unreachable. Verification aborted.' };
+    return { success: false, error: 'Source URL unreachable.' };
   }
 };
 
 /**
- * Dynamic Exchange Logic (DA-to-Points)
+ * Exchange Logic Function
  * 
- * Logic Rationale:
- * High Domain Authority (DA) sites are more valuable for SEO. 
- * Points are calculated directly as the DA of the source site.
- * 
- * - Provider (Site with DA 40) gives a link.
- * - Provider earns 40 points.
- * - Recipient pays 40 points.
+ * Calculation Handled:
+ * - Provider (User A) hosts a link on their site (DA 40).
+ * - User A earns 40 points (The DA value of the source site).
+ * - Recipient (User B) loses 40 points.
  */
 export const executeExchange = (
-  providerId: string, 
-  recipientId: string, 
-  sourceWebsiteDA: number,
-  transaction: Transaction
+  providerId: string,
+  recipientId: string,
+  daScore: number,
+  tx: Transaction
 ) => {
-  const pointValue = sourceWebsiteDA;
-
-  // 1. Recipient points deduction
-  db.updateUserPoints(recipientId, -pointValue);
+  // Transfer Logic
+  db.updateUserPoints(providerId, daScore);
+  db.updateUserPoints(recipientId, -daScore);
   
-  // 2. Provider points award
-  db.updateUserPoints(providerId, pointValue);
-
-  // 3. Mark transaction as verified and record
-  transaction.status = 'verified';
-  transaction.pointsTransferred = pointValue;
-  db.addTransaction(transaction);
+  // Record Transaction
+  tx.status = 'verified';
+  tx.pointsTransferred = daScore;
+  db.addTransaction(tx);
 };

@@ -1,53 +1,35 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { SEOAnalysis } from "../types.ts";
 
-// Standard environment variable handling with fallback for browser contexts
-const getApiKey = () => {
-  try {
-    return typeof process !== 'undefined' ? process.env.API_KEY : '';
-  } catch (e) {
-    return '';
-  }
-};
-
-export const analyzeWebsiteForDA = async (domain: string): Promise<{ da: number, niche: string, summary: string }> => {
-  const apiKey = getApiKey();
+export const analyzeDomain = async (domain: string): Promise<SEOAnalysis> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  if (!apiKey) {
-    console.warn("API_KEY not found, using fallback analysis.");
-    return { 
-      da: Math.floor(Math.random() * 30) + 15, 
-      niche: 'Pending Verification', 
-      summary: 'Analysis pending API configuration.' 
-    };
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
-
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Analyze this domain for approximate SEO metrics: ${domain}. Focus on Domain Authority (DA) 1-100, Niche, and a 1-sentence content quality summary.`,
+      contents: `Analyze the domain "${domain}" for SEO metrics. Estimate its Domain Authority (1-100), identify its primary niche, and provide a 1-sentence summary of its content profile. Return JSON.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            da: { type: Type.NUMBER, description: 'Estimated Domain Authority (1-100)' },
-            niche: { type: Type.STRING, description: 'Main category of the site' },
-            summary: { type: Type.STRING, description: 'Brief content summary' }
+            da: { type: Type.NUMBER, description: 'Domain Authority score' },
+            niche: { type: Type.STRING, description: 'SEO Niche' },
+            summary: { type: Type.STRING, description: 'Brief site summary' }
           },
           required: ['da', 'niche', 'summary']
         }
       }
     });
 
-    return JSON.parse(response.text || '{}');
+    const result = JSON.parse(response.text || '{}');
+    return {
+      da: result.da || 20,
+      niche: result.niche || 'General',
+      summary: result.summary || 'A standard web property.'
+    };
   } catch (error) {
     console.error("AI Analysis failed:", error);
-    return { 
-      da: Math.floor(Math.random() * 40) + 10, 
-      niche: 'General', 
-      summary: 'Automated analysis unavailable. Using default estimates.' 
-    };
+    return { da: 15, niche: 'Uncategorized', summary: 'Verification pending.' };
   }
 };
