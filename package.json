@@ -1,0 +1,23 @@
+
+{
+  "name": "link-authority-exchange",
+  "version": "1.0.0",
+  "description": "Domain Authority based backlink exchange",
+  "main": "index.tsx",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@google/genai": "^0.21.0",
+    "lucide-react": "^0.344.0",
+    "axios": "^1.6.7",
+    "cheerio": "^1.0.0-rc.12",
+    "framer-motion": "^11.0.8",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.2.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.19",
+    "typescript": "^5.3.3"
+  }
+}
